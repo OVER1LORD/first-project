@@ -1,0 +1,16 @@
+To run deployment
+kubectl apply -f <filename>.yml
+
+To create service
+kubectl create -f <filename>.yml
+To run service
+kubectl apply -f <filename>.yml
+
+To get jenkins password
+kubectl get pods
+kubectl exec -ti <Pod Name> bash
+<cd to directory>
+
+To connect to cluster's jenkins
+kubectl get svc
+curl <cluster-ip>:<port>
