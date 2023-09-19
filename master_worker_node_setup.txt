@@ -1,0 +1,122 @@
+#!/bin/bash
+
+echo "Config master or slave?(m/s)"
+read res
+
+echo "Run as . ./install.sh"
+
+
+if [[ $res == "m" ]]; then
+	echo "master configuration is selected ... "
+else
+	echo "worker cofiguration is selected ..."
+fi
+
+
+tee /etc/modules-load.d/containerd.conf <<EOF
+overlay
+br_netfilter
+EOF
+
+modprobe overlay
+modprobe br_netfilter
+
+tee /etc/sysctl.d/kubernetes.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl --system
+
+sudo apt update
+
+echo "------------------------------------------"
+echo "|docker installation begins here ...      |"
+echo "------------------------------------------"
+
+
+
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+
+apt-cache policy docker-ce
+
+sudo apt install docker-ce
+
+#sudo systemctl status docker
+
+sudo usermod -aG docker azureuser
+
+sudo chmod 666 /var/run/docker.sock
+
+
+
+
+echo "------------------------------------------"
+echo "| docker installation is completed ...   |"
+echo "------------------------------------------"
+
+
+containerd config default> /etc/containerd/config.toml
+
+sed -e 's/SystemdCgroup = false/SystemdCgroup = true/g' -i /etc/containerd/config.toml
+
+systemctl daemon-reload
+
+systemctl restart containerd
+
+systemctl enable containerd
+
+#systemctl status containerd
+
+apt update && apt install -y apt-transport-https ca-certificates curl
+
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
+
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+KUBE_VERSION=1.26.0
+
+echo ""
+
+apt update
+
+apt-get install -y kubelet=${KUBE_VERSION}-00  kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00 kubernetes-cni
+
+echo ""
+
+apt-mark hold kubelet kubeadm kubectl
+
+echo ""
+
+systemctl enable kubelet && systemctl start kubelet
+
+echo ""
+
+echo "Finished installing kubernetes with docker "
+
+echo ""
+
+
+if [[ $res == "m" ]]; then
+	kubeadm init --kubernetes-version=${KUBE_VERSION} --ignore-preflight-errors=Mem
+	export KUBECONFIG=/etc/kubernetes/admin.conf
+	kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+else
+	echo "----------------------------------------------------------------------"
+	echo "Worker node is now ready enter the token generated in master .... "
+	echo "----------------------------------------------------------------------"
+fi
+echo "------------------------------------------"
+echo "Ready to join the master ..."
+echo "------------------------------------------"
+echo ""
+
+# by vittal modified 15/09/2023
+
